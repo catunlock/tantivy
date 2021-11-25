@@ -1,3 +1,6 @@
+use futures::lock::Mutex;
+use qdrant_segment::index::VectorIndex;
+
 use super::{segment::Segment, IndexSettings};
 use crate::core::Executor;
 use crate::core::IndexMeta;
@@ -22,6 +25,8 @@ use crate::schema::FieldType;
 use crate::schema::Schema;
 use crate::tokenizer::{TextAnalyzer, TokenizerManager};
 use crate::IndexWriter;
+use crate::vector::VectorManager;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 
@@ -190,9 +195,15 @@ pub struct Index {
     executor: Arc<Executor>,
     tokenizers: TokenizerManager,
     inventory: SegmentMetaInventory,
+    vector_manager: HashMap<SegmentId, Arc<VectorManager>>
 }
 
 impl Index {
+
+    pub fn vector_manager(&self) -> &HashMap<SegmentId, Arc<VectorManager>> {
+        &self.vector_manager
+    }
+
     /// Creates a new builder.
     pub fn builder() -> IndexBuilder {
         IndexBuilder::new()
@@ -301,6 +312,7 @@ impl Index {
             tokenizers: TokenizerManager::default(),
             executor: Arc::new(Executor::single_thread()),
             inventory,
+            vector_manager: HashMap::new()
         }
     }
 
