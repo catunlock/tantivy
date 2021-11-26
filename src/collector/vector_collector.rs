@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use futures::SinkExt;
 
-use crate::{DocAddress, SegmentOrdinal, schema::Field, vector::VectorReader};
+use crate::{DocAddress, SegmentOrdinal, schema::Field, vector::VectorField};
 
 use super::{Collector, SegmentCollector};
 
@@ -58,15 +60,15 @@ impl VectorCollector {
 }
 
 pub struct VectorSegmentCollector {
-    reader: VectorReader,
+    vector_segment: Arc<VectorField>,
     fruits: Vec<(DocAddress, Vec<f32>)>,
     segment_ord: u32,
 }
 
 impl VectorSegmentCollector {
-    fn new(reader: VectorReader, segment_ord: SegmentOrdinal) -> VectorSegmentCollector {
+    fn new(vector_segment: Arc<VectorField>, segment_ord: SegmentOrdinal) -> VectorSegmentCollector {
         VectorSegmentCollector {
-            reader,
+            vector_segment,
             fruits: Vec::new(),
             segment_ord
         }

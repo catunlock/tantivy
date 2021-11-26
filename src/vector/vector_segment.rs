@@ -11,15 +11,16 @@ use crate::{DocId, TantivyError, schema::{Field, Schema}};
 
 type ScoreType = f32;
 
-pub struct VectorSegment {
-    segment: qdrant_segment::segment::Segment,
+pub struct VectorField {
+    //segment: qdrant_segment::segment::Segment,
+    segment: u32
 }
 
-impl VectorSegment {
+impl VectorField {
 
     /// Creates a VectorReader on this path. Usually this method is call from the VectorReaders
     /// container of the segment reader.
-    pub fn new(segment_path: &PathBuf, field: Field, config: &SegmentConfig) -> VectorSegment {
+    pub fn new(segment_path: &PathBuf, field: Field, config: &SegmentConfig) -> VectorField {
         
         let field_path = field.field_id().to_string();
         let path = segment_path.join(field_path);
@@ -36,11 +37,12 @@ impl VectorSegment {
             },
         };
 
-        VectorSegment { segment }
+        VectorField { segment: 2 }
     }
 
     /// Search documents with similarity to this vector.
     pub fn search(&self, vector: &Vec<f32>, limit: usize) -> Vec<(DocId, ScoreType)> {
+        /*
         let res = self
             .segment
             .search(&vector, &WithPayload::default(), None, limit, None)
@@ -49,15 +51,20 @@ impl VectorSegment {
         res.iter().map(|x | {
             (x.id as DocId, x.score as ScoreType)
         }).collect()
+        */
+        todo!();
     }
 
 
     /// Stores vector for this document
-    pub fn record(&mut self, doc_id: DocId, vector: &Vec<f32>) -> crate::Result<bool> {
+    pub fn record(&self, doc_id: DocId, vector: &Vec<f32>) -> crate::Result<bool> {
         trace!("record => {} - {:?}", doc_id, vector);
+        /*
         match self.segment.upsert_point(1, doc_id as u64, vector) {
             Ok(b) => Ok(b),
             Err(e) => Err(TantivyError::InvalidArgument(e.to_string())),
         }
+        */
+        todo!()
     }
 }

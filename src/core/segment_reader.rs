@@ -1,8 +1,8 @@
+use crate::core::index;
 use crate::core::InvertedIndexReader;
 use crate::core::Segment;
 use crate::core::SegmentComponent;
 use crate::core::SegmentId;
-use crate::core::index;
 use crate::directory::CompositeFile;
 use crate::directory::FileSlice;
 use crate::error::DataCorruption;
@@ -17,9 +17,9 @@ use crate::schema::{Field, IndexRecordOption};
 use crate::space_usage::SegmentSpaceUsage;
 use crate::store::StoreReader;
 use crate::termdict::TermDictionary;
-use crate::DocId;
-use crate::vector::VectorManager;
 use crate::vector::VectorSegment;
+use crate::vector::VectorField;
+use crate::DocId;
 use fail::fail_point;
 use qdrant_segment::entry::entry_point::SegmentEntry;
 use std::fmt;
@@ -51,7 +51,7 @@ pub struct SegmentReader {
     positions_composite: CompositeFile,
     fast_fields_readers: Arc<FastFieldReaders>,
     fieldnorm_readers: FieldNormReaders,
-    vector_manager: Arc<VectorManager>,
+    vector_segment: Arc<RwLock<VectorSegment>>,
 
     store_file: FileSlice,
     alive_bitset_opt: Option<AliveBitSet>,
@@ -102,15 +102,18 @@ impl SegmentReader {
     }
 
     /// Open or create a vector reader on this segment for this field.
-    pub fn vector_reader(&self, field: Field) -> crate::Result<Arc<VectorSegment>> {
+    pub fn vector_reader(&self, field: Field) -> crate::Result<Arc<VectorField>> {
         let field_entry = self.schema.get_field_entry(field);
 
         match field_entry.field_type() {
             FieldType::Vector(_) => {
+                let r = self.vector_segment
+                .write()
+                .unwrap()
+                .open_read(field);
 
-                Ok(self.vector_manager.open_read(field))
-
-            }
+                Ok(r)
+            },
             _ => Err(crate::TantivyError::InvalidArgument(format!(
                 "Field {:?} is not a facet field.",
                 field_entry.name()
@@ -215,18 +218,23 @@ impl SegmentReader {
             .map(|alive_bitset| alive_bitset.num_alive_docs() as u32)
             .unwrap_or(max_doc);
 
-        
         let cosa = segment.index().directory();
 
         let segment_path = segment.relative_path(SegmentComponent::Vectors);
-        let vector_manager = match segment.index().vector_manager().get(&segment.id()) {
-            Some(vm) => *vm,
+        let vector_segment = match segment
+            .index()
+            .vector_index()
+            .get(&segment.id())
+        {
+            Some(vm) => Arc::clone(vm),
             None => {
-                let vm = Arc::new(VectorManager::new(segment_path));
-
-                segment.index().vector_manager().insert(segment.id(), Arc::clone(&vm));
+                let vm = Arc::new(RwLock::new(VectorSegment::new(segment_path)));
+                segment
+                    .index_mut()
+                    .vector_index()
+                    .insert(segment.id(), Arc::clone(&vm));
                 vm
-            },
+            }
         };
 
         Ok(SegmentReader {
@@ -242,7 +250,7 @@ impl SegmentReader {
             alive_bitset_opt,
             positions_composite,
             schema,
-            vector_manager
+            vector_segment: Arc::clone(&vector_segment),
         })
     }
 
@@ -356,7 +364,7 @@ impl SegmentReader {
             self.positions_composite.space_usage(),
             self.fast_fields_readers.space_usage(),
             self.fieldnorm_readers.space_usage(),
-            self.vector_manager.space_usage(),
+            self.vector_segment.read().unwrap().space_usage(),
             self.get_store_reader()?.space_usage(),
             self.alive_bitset_opt
                 .as_ref()

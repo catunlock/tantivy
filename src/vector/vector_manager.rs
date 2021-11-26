@@ -4,19 +4,19 @@ use qdrant_segment::types::{Distance, Indexes, SegmentConfig};
 
 use crate::{DocId, schema::Field, space_usage::PerFieldSpaceUsage};
 
-use super::VectorSegment;
+use super::VectorField;
 
 /// VectorWriter for segment.
 /// Internally contains a Writer for each field. Lazy Initialization, a writer is created when a
 /// search access its field.
-pub struct VectorManager {
+pub struct VectorSegment {
     segment_path: PathBuf,
-    vector_map: HashMap<Field, Arc<VectorSegment>>,
+    vector_map: HashMap<Field, Arc<VectorField>>,
     segment_config: SegmentConfig,
 }
 
-impl VectorManager {
-    pub fn new(segment_path: PathBuf) -> VectorManager {
+impl VectorSegment {
+    pub fn new(segment_path: PathBuf) -> VectorSegment {
         trace!("Create VectorManager for segment");
 
         let config = SegmentConfig {
@@ -27,7 +27,7 @@ impl VectorManager {
             storage_type: Default::default(),
         };
 
-        VectorManager {
+        VectorSegment {
             segment_path,
             segment_config: config,
             vector_map: HashMap::new(),
@@ -36,12 +36,12 @@ impl VectorManager {
 
     pub fn record(&mut self, doc_id: DocId, field: Field, vector: &Vec<f32>) -> crate::Result<bool> {
         trace!("record {} - {:?} - {:?}", doc_id, field, vector);
-        match self.vector_map.get_mut(&field) {
+        match self.vector_map.get(&field) {
             Some(writer) => {
                 writer.record(doc_id, vector)
             }
             None => {
-                let mut writer = VectorSegment::new(&self.segment_path, field, &self.segment_config);
+                let mut writer = VectorField::new(&self.segment_path, field, &self.segment_config);
                 let result = writer.record(doc_id, vector);
                 self.vector_map.insert(field, Arc::new(writer));
 
@@ -52,12 +52,12 @@ impl VectorManager {
         
     }
 
-    pub fn open_read(&self, field: Field) -> Arc<VectorSegment> {
+    pub fn open_read(&mut self, field: Field) -> Arc<VectorField> {
         match self.vector_map.get(&field) {
             Some(vector_segment) => Arc::clone(vector_segment),
             None => {
-                let vector_segment = Arc::new(VectorSegment::new(&self.segment_path, field, &self.segment_config));
-                self.vector_map.insert(field, vector_segment);
+                let vector_segment = Arc::new(VectorField::new(&self.segment_path, field, &self.segment_config));
+                self.vector_map.insert(field, Arc::clone(&vector_segment));
 
                 vector_segment
             },

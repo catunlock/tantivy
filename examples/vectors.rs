@@ -23,8 +23,8 @@ fn main() -> tantivy::Result<()> {
     env_logger::init();
     info!("Vectors example");
 
-    let index_path = TempDir::new()?;
-
+    // let index_path = TempDir::new()?;
+    let index_path = "data_vectors";
 
     let mut schema_builder = Schema::builder();
 
@@ -42,6 +42,8 @@ fn main() -> tantivy::Result<()> {
 
     let schema = schema_builder.build();
 
+    std::fs::remove_dir_all(&index_path)?;
+    std::fs::create_dir_all(&index_path)?;
     
     let index = Index::create_in_dir(&index_path, schema.clone())?;
     let mut index_writer = index.writer(50_000_000)?;

@@ -19,7 +19,7 @@ mod tests {
         let index = Index::create_in_ram(schema);
         let mut index_writer = index.writer_for_tests()?;
         index_writer.add_document(doc!(bytes_field=>vec![0u8, 1, 2, 3]))?;
-        index_writer.add_document(doc!(bytes_field=>vec![]))?;
+        index_writer.add_document(doc!(bytes_field=>vec![0u8]))?;
         index_writer.add_document(doc!(bytes_field=>vec![255u8]))?;
         index_writer.add_document(doc!(bytes_field=>vec![1u8, 3, 5, 7, 9]))?;
         index_writer.add_document(doc!(bytes_field=>vec![0u8; 1000]))?;

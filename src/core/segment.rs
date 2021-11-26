@@ -34,6 +34,10 @@ impl Segment {
         &self.index
     }
 
+    pub fn index_mut(&mut self) -> &mut Index {
+        &mut self.index
+    }
+
     /// Returns our index's schema.
     pub fn schema(&self) -> Schema {
         self.index.schema()

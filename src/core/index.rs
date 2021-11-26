@@ -25,7 +25,7 @@ use crate::schema::FieldType;
 use crate::schema::Schema;
 use crate::tokenizer::{TextAnalyzer, TokenizerManager};
 use crate::IndexWriter;
-use crate::vector::VectorManager;
+use crate::vector::VectorSegment;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -34,6 +34,7 @@ use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 fn load_metas(
     directory: &dyn Directory,
@@ -186,6 +187,8 @@ impl IndexBuilder {
     }
 }
 
+type VM = HashMap<SegmentId, Arc<RwLock<VectorSegment>>>;
+
 /// Search Index
 #[derive(Clone)]
 pub struct Index {
@@ -195,13 +198,13 @@ pub struct Index {
     executor: Arc<Executor>,
     tokenizers: TokenizerManager,
     inventory: SegmentMetaInventory,
-    vector_manager: HashMap<SegmentId, Arc<VectorManager>>
+    vector_index: VM
 }
 
 impl Index {
 
-    pub fn vector_manager(&self) -> &HashMap<SegmentId, Arc<VectorManager>> {
-        &self.vector_manager
+    pub fn vector_index(&self) -> &VM {
+        &self.vector_index
     }
 
     /// Creates a new builder.
@@ -312,7 +315,7 @@ impl Index {
             tokenizers: TokenizerManager::default(),
             executor: Arc::new(Executor::single_thread()),
             inventory,
-            vector_manager: HashMap::new()
+            vector_index: HashMap::new()
         }
     }
 

@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use super::{doc_id_mapping::{get_doc_id_mapping_from_field, DocIdMapping}, operation::AddOperation};
-use crate::{fastfield::FastFieldsWriter, vector::VectorManager};
+use crate::{fastfield::FastFieldsWriter, vector::VectorSegment};
 use crate::fieldnorm::{FieldNormReaders, FieldNormsWriter};
 use crate::indexer::segment_serializer::SegmentSerializer;
 use crate::postings::compute_table_size;
@@ -60,7 +60,7 @@ pub struct SegmentWriter {
     pub(crate) segment_serializer: SegmentSerializer,
     pub(crate) fast_field_writers: FastFieldsWriter,
     pub(crate) fieldnorms_writer: FieldNormsWriter,
-    pub(crate) vector_manager: Arc<VectorManager>,
+    pub(crate) vector_segment: Arc<RwLock<VectorSegment>>,
     pub(crate) doc_opstamps: Vec<Opstamp>,
     tokenizers: Vec<Option<TextAnalyzer>>,
     term_buffer: Term,
@@ -81,7 +81,16 @@ impl SegmentWriter {
         segment: Segment,
         schema: &Schema,
     ) -> crate::Result<SegmentWriter> {
-        let vectors_path = segment.relative_path(SegmentComponent::Vectors);
+        let segment_path = segment.relative_path(SegmentComponent::Vectors);
+        let vector_manager = match segment.index().vector_index().get(&segment.id()) {
+            Some(vm) => Arc::clone(vm),
+            None => {
+                let vm = Arc::new(RwLock::new(VectorSegment::new(segment_path)));
+                segment.index().vector_index().insert(segment.id(), Arc::clone(&vm));
+                vm
+            },
+        };
+
         let tokenizer_manager = segment.index().tokenizers().clone();
         let table_num_bits = initial_table_size(memory_budget)?;
         let segment_serializer = SegmentSerializer::for_segment(segment, false)?;
@@ -101,16 +110,8 @@ impl SegmentWriter {
             )
             .collect();
 
-        let segment_path = segment.relative_path(SegmentComponent::Vectors);
-        let vector_manager = match segment.index().vector_manager().get(&segment.id()) {
-            Some(vm) => *vm,
-            None => {
-                let vm = Arc::new(VectorManager::new(segment_path));
+        
 
-                segment.index().vector_manager().insert(segment.id(), Arc::clone(&vm));
-                vm
-            },
-        };
 
         Ok(SegmentWriter {
             max_doc: 0,
@@ -121,7 +122,7 @@ impl SegmentWriter {
             doc_opstamps: Vec::with_capacity(1_000),
             tokenizers,
             term_buffer: Term::new(),
-            vector_manager
+            vector_segment: vector_manager
         })
     }
 
@@ -327,7 +328,7 @@ impl SegmentWriter {
                             .ok_or_else(make_schema_error)?;
 
                         trace!("SegmentWritter::add_document vector {:?} - {:?}", field, vec_val);
-                        self.vector_manager.record(doc_id, field, vec_val);
+                        self.vector_segment.write().unwrap().record(doc_id, field, vec_val);
                     }
                 }
             }
